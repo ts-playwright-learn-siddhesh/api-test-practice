@@ -16,7 +16,18 @@ export default defineConfig({
   projects: [
     {
       name: 'reqres',
+      testDir: './tests/users',
       use: { baseURL: 'https://reqres.in/api/' },
+    },
+    {
+      name: 'dummyjson',
+      testDir: './tests/auth',
+      use: { baseURL: 'https://dummyjson.com/' },
+    },
+    {
+      name: 'restful-booker',
+      testDir: './tests/bookings',
+      use: { baseURL: 'https://restful-booker.herokuapp.com/' },
     },
   ],
 });
