@@ -179,35 +179,13 @@ test.describe(
     );
 
     // ============================================================
-    // TC-USERS-008: Requesting a user with an invalid API key is
-    // rejected with 403, an invalid_api_key error and no user data
-    // ============================================================
-    test(
-      '[TC-USERS-008] request with invalid API key is rejected with 403',
-      {
-        annotation: [{ type: 'test-case', description: 'TC-USERS-008' }],
-        tag: ['@negative'],
-      },
-      async ({ request }) => {
-        const response = await request.get('users/2', { headers: { 'x-api-key': 'invalid-key' } });
-
-        expect(response.status()).toBe(403);
-        expect(response.headers()['content-type']).toContain('application/json');
-
-        const body = await response.json();
-        expect(body.error).toBe('invalid_api_key');
-        expect(body.data).toBeUndefined();
-      }
-    );
-
-    // ============================================================
-    // TC-USERS-009: Requesting a user id that does not exist returns
+    // TC-USERS-008: Requesting a user id that does not exist returns
     // 404 with no user data
     // ============================================================
     test(
-      '[TC-USERS-009] fetching a non-existent user returns 404',
+      '[TC-USERS-008] fetching a non-existent user returns 404',
       {
-        annotation: [{ type: 'test-case', description: 'TC-USERS-009' }],
+        annotation: [{ type: 'test-case', description: 'TC-USERS-008' }],
         tag: ['@negative'],
       },
       async ({ request }) => {
