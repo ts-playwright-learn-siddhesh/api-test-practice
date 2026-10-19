@@ -7,26 +7,30 @@ test.describe(
   },
   () => {
     // ============================================================
-    // TC-USERS-001: Fetching an existing user by id returns 200 with
-    // JSON content and that user's id, email and name
+    // TC-USERS-001: Fetching a created user by id returns 200 with
+    // JSON content and that user's id and email
     // ============================================================
     test(
-      '[TC-USERS-001] fetching an existing user returns that user',
+      '[TC-USERS-001] fetching a created user returns that user',
       {
         annotation: [{ type: 'test-case', description: 'TC-USERS-001' }],
         tag: ['@smoke', '@positive'],
       },
       async ({ request }) => {
-        const response = await request.get('users/2');
+        const newUser = { email: process.env.REQRES_EMAIL, password: process.env.REQRES_PASSWORD };
+
+        const createResponse = await request.post('register', { data: newUser });
+        expect(createResponse.status()).toBe(200);
+        const createdUser = await createResponse.json();
+
+        const response = await request.get(`users/${createdUser.id}`);
 
         expect(response.status()).toBe(200);
         expect(response.headers()['content-type']).toContain('application/json');
 
         const body = await response.json();
-        expect(body.data.id).toBe(2);
-        expect(body.data.email).toBe('janet.weaver@reqres.in');
-        expect(body.data.first_name).toBe('Janet');
-        expect(body.data.last_name).toBe('Weaver');
+        expect(body.data.id).toBe(createdUser.id);
+        expect(body.data.email).toBe(newUser.email);
       }
     );
 

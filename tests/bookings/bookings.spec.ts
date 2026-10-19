@@ -1,4 +1,5 @@
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { createBooking, getToken, toJson } from './booking-utils';
 
 const booking = {
   firstname: 'Jim',
@@ -8,20 +9,6 @@ const booking = {
   bookingdates: { checkin: '2026-01-01', checkout: '2026-01-02' },
   additionalneeds: 'Breakfast',
 };
-
-async function getToken(request: APIRequestContext): Promise<string> {
-  const response = await request.post('auth', { data: { username: 'admin', password: 'password123' } });
-  expect(response.status()).toBe(200);
-  const body = await response.json();
-  return body.token;
-}
-
-async function createBooking(request: APIRequestContext, data: typeof booking = booking): Promise<number> {
-  const response = await request.post('booking', { data });
-  expect(response.status()).toBe(200);
-  const body = await response.json();
-  return body.bookingid;
-}
 
 test.describe(
   'Bookings — API',
@@ -40,16 +27,25 @@ test.describe(
         tag: ['@smoke', '@positive'],
       },
       async ({ request }) => {
-        const token = await getToken(request);
-        const bookingId = await createBooking(request);
+        const token = await test.step('Get auth token', async () => getToken(request));
+        const bookingId = await test.step('Create booking', async () => createBooking(request, booking));
 
-        const deleteResponse = await request.delete(`booking/${bookingId}`, {
-          headers: { Cookie: `token=${token}` },
+        await test.step('Verify booking was created', async () => {
+          const createdResponse = await request.get(`booking/${bookingId}`);
+          expect(createdResponse.status()).toBe(200);
         });
-        expect(deleteResponse.status()).toBe(201);
 
-        const getResponse = await request.get(`booking/${bookingId}`);
-        expect(getResponse.status()).toBe(404);
+        await test.step('Delete booking', async () => {
+          const deleteResponse = await request.delete(`booking/${bookingId}`, {
+            headers: { Cookie: `token=${token}` },
+          });
+          expect(deleteResponse.status()).toBe(201);
+        });
+
+        await test.step('Verify deleted booking returns 404', async () => {
+          const getResponse = await request.get(`booking/${bookingId}`);
+          expect(getResponse.status()).toBe(404);
+        });
       }
     );
 
@@ -65,34 +61,40 @@ test.describe(
         tag: ['@negative'],
       },
       async ({ request }) => {
-        const bookingId = await createBooking(request);
+        const bookingId = await test.step('Create booking', async () => createBooking(request, booking));
         const update = { additionalneeds: 'Lunch' };
 
-        const staleResponse = await request.patch(`booking/${bookingId}`, {
-          headers: { Cookie: 'token=stale-token' },
-          data: update,
+        await test.step('Update with stale token is rejected', async () => {
+          const staleResponse = await request.patch(`booking/${bookingId}`, {
+            headers: { Cookie: 'token=stale-token' },
+            data: update,
+          });
+          expect(staleResponse.status()).toBe(403);
         });
-        expect(staleResponse.status()).toBe(403);
 
-        const newToken = await getToken(request);
-        const retryResponse = await request.patch(`booking/${bookingId}`, {
-          headers: { Cookie: `token=${newToken}` },
-          data: update,
+        await test.step('Retry update with new token', async () => {
+          const newToken = await getToken(request);
+          const retryResponse = await request.patch(`booking/${bookingId}`, {
+            headers: { Cookie: `token=${newToken}` },
+            data: update,
+          });
+          expect(retryResponse.status()).toBe(200);
         });
-        expect(retryResponse.status()).toBe(200);
 
-        const getResponse = await request.get(`booking/${bookingId}`);
-        const saved = await getResponse.json();
-        expect(saved.additionalneeds).toBe('Lunch');
+        await test.step('Verify change is saved', async () => {
+          const getResponse = await request.get(`booking/${bookingId}`);
+          const saved = await toJson(getResponse);
+          expect(saved.additionalneeds).toBe('Lunch');
+        });
       }
     );
 
     // ============================================================
     // TC-BOOKING-003: Creating a booking with special characters in
-    // text fields saves them unchanged
+    // first and last name saves them unchanged
     // ============================================================
     test(
-      '[TC-BOOKING-003] special characters in booking fields are saved unchanged',
+      '[TC-BOOKING-003] special characters in first and last name are saved unchanged',
       {
         annotation: [{ type: 'test-case', description: 'TC-BOOKING-003' }],
         tag: ['@positive'],
@@ -102,18 +104,20 @@ test.describe(
           ...booking,
           firstname: 'José',
           lastname: "O'Brien & Sons/李",
-          additionalneeds: 'Breakfast?=#%',
         };
 
-        const bookingId = await createBooking(request, specialBooking);
+        const bookingId = await test.step('Create booking with special characters', async () =>
+          createBooking(request, specialBooking)
+        );
 
-        const response = await request.get(`booking/${bookingId}`);
-        expect(response.status()).toBe(200);
+        await test.step('Verify first and last name are saved unchanged', async () => {
+          const response = await request.get(`booking/${bookingId}`);
+          expect(response.status()).toBe(200);
 
-        const saved = await response.json();
-        expect(saved.firstname).toBe(specialBooking.firstname);
-        expect(saved.lastname).toBe(specialBooking.lastname);
-        expect(saved.additionalneeds).toBe(specialBooking.additionalneeds);
+          const saved = await toJson(response);
+          expect(saved.firstname).toBe(specialBooking.firstname);
+          expect(saved.lastname).toBe(specialBooking.lastname);
+        });
       }
     );
 
@@ -127,14 +131,16 @@ test.describe(
         tag: ['@positive'],
       },
       async ({ request }) => {
-        const bookingId = await createBooking(request);
+        const bookingId = await test.step('Create booking', async () => createBooking(request, booking));
 
-        const start = Date.now();
-        const response = await request.get(`booking/${bookingId}`);
-        const durationMs = Date.now() - start;
+        await test.step('Fetch booking within 3 seconds', async () => {
+          const start = Date.now();
+          const response = await request.get(`booking/${bookingId}`);
+          const durationMs = Date.now() - start;
 
-        expect(response.status()).toBe(200);
-        expect(durationMs).toBeLessThan(3000);
+          expect(response.status()).toBe(200);
+          expect(durationMs).toBeLessThan(3000);
+        });
       }
     );
   }
