@@ -18,13 +18,17 @@ test.describe(
         tag: ['@smoke', '@negative'],
       },
       async ({ request }) => {
-        const response = await request.get('auth/me');
+        const response = await test.step('Request current user without authorization header', async () =>
+          request.get('auth/me')
+        );
 
-        expect(response.status()).toBe(401);
+        await test.step('Verify request is rejected with 401', async () => {
+          expect(response.status()).toBe(401);
 
-        const body = await response.json();
-        expect(body.message).toBe('Access Token is required');
-        expect(body.id).toBeUndefined();
+          const body = await response.json();
+          expect(body.message).toBe('Access Token is required');
+          expect(body.id).toBeUndefined();
+        });
       }
     );
   }

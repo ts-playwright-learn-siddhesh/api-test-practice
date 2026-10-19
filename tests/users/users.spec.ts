@@ -19,18 +19,22 @@ test.describe(
       async ({ request }) => {
         const newUser = { email: process.env.REQRES_EMAIL, password: process.env.REQRES_PASSWORD };
 
-        const createResponse = await request.post('register', { data: newUser });
-        expect(createResponse.status()).toBe(200);
-        const createdUser = await createResponse.json();
+        const createdUser = await test.step('Create user', async () => {
+          const createResponse = await request.post('register', { data: newUser });
+          expect(createResponse.status()).toBe(200);
+          return createResponse.json();
+        });
 
-        const response = await request.get(`users/${createdUser.id}`);
+        await test.step('Fetch created user and verify id and email', async () => {
+          const response = await request.get(`users/${createdUser.id}`);
 
-        expect(response.status()).toBe(200);
-        expect(response.headers()['content-type']).toContain('application/json');
+          expect(response.status()).toBe(200);
+          expect(response.headers()['content-type']).toContain('application/json');
 
-        const body = await response.json();
-        expect(body.data.id).toBe(createdUser.id);
-        expect(body.data.email).toBe(newUser.email);
+          const body = await response.json();
+          expect(body.data.id).toBe(createdUser.id);
+          expect(body.data.email).toBe(newUser.email);
+        });
       }
     );
 
@@ -46,25 +50,30 @@ test.describe(
         tag: ['@positive'],
       },
       async ({ request }) => {
-        const response = await request.get('users', { params: { page: 2 } });
+        const body = await test.step('List users for page 2', async () => {
+          const response = await request.get('users', { params: { page: 2 } });
+          expect(response.status()).toBe(200);
+          return response.json();
+        });
 
-        expect(response.status()).toBe(200);
+        await test.step('Verify pagination info', async () => {
+          expect(body.page).toBe(2);
+          expect(body.per_page).toBe(6);
+          expect(body.data.length).toBe(body.per_page);
+        });
 
-        const body = await response.json();
-        expect(body.page).toBe(2);
-        expect(body.per_page).toBe(6);
-        expect(body.data.length).toBe(body.per_page);
-
-        const users: Array<{ id: unknown; email: unknown; first_name: unknown }> = body.data;
-        const allUsersValid = users.every(
-          (user) =>
-            typeof user.id === 'number' &&
-            typeof user.email === 'string' &&
-            user.email.endsWith('@reqres.in') &&
-            typeof user.first_name === 'string' &&
-            user.first_name.length > 0
-        );
-        expect(allUsersValid).toBe(true);
+        await test.step('Verify every user is well-formed', async () => {
+          const users: Array<{ id: unknown; email: unknown; first_name: unknown }> = body.data;
+          const allUsersValid = users.every(
+            (user) =>
+              typeof user.id === 'number' &&
+              typeof user.email === 'string' &&
+              user.email.endsWith('@reqres.in') &&
+              typeof user.first_name === 'string' &&
+              user.first_name.length > 0
+          );
+          expect(allUsersValid).toBe(true);
+        });
       }
     );
 
@@ -81,16 +90,18 @@ test.describe(
       async ({ request }) => {
         const newUser = { name: 'morpheus', job: 'leader' };
 
-        const response = await request.post('users', { data: newUser });
+        const response = await test.step('Create user', async () => request.post('users', { data: newUser }));
 
-        expect(response.status()).toBe(201);
+        await test.step('Verify sent data, new id and createdAt are returned', async () => {
+          expect(response.status()).toBe(201);
 
-        const body = await response.json();
-        expect(body.name).toBe(newUser.name);
-        expect(body.job).toBe(newUser.job);
-        expect(typeof body.id).toBe('string');
-        expect(body.id.length).toBeGreaterThan(0);
-        expect(Number.isNaN(Date.parse(body.createdAt))).toBe(false);
+          const body = await response.json();
+          expect(body.name).toBe(newUser.name);
+          expect(body.job).toBe(newUser.job);
+          expect(typeof body.id).toBe('string');
+          expect(body.id.length).toBeGreaterThan(0);
+          expect(Number.isNaN(Date.parse(body.createdAt))).toBe(false);
+        });
       }
     );
 
@@ -107,14 +118,18 @@ test.describe(
       async ({ request }) => {
         const replacement = { name: 'morpheus', job: 'zion resident' };
 
-        const response = await request.put('users/2', { data: replacement });
+        const response = await test.step('Replace user with PUT', async () =>
+          request.put('users/2', { data: replacement })
+        );
 
-        expect(response.status()).toBe(200);
+        await test.step('Verify new name, job and updatedAt are returned', async () => {
+          expect(response.status()).toBe(200);
 
-        const body = await response.json();
-        expect(body.name).toBe(replacement.name);
-        expect(body.job).toBe(replacement.job);
-        expect(Number.isNaN(Date.parse(body.updatedAt))).toBe(false);
+          const body = await response.json();
+          expect(body.name).toBe(replacement.name);
+          expect(body.job).toBe(replacement.job);
+          expect(Number.isNaN(Date.parse(body.updatedAt))).toBe(false);
+        });
       }
     );
 
@@ -129,14 +144,18 @@ test.describe(
         tag: ['@positive'],
       },
       async ({ request }) => {
-        const response = await request.patch('users/2', { data: { job: 'captain' } });
+        const response = await test.step('Update only job with PATCH', async () =>
+          request.patch('users/2', { data: { job: 'captain' } })
+        );
 
-        expect(response.status()).toBe(200);
+        await test.step('Verify only job is changed', async () => {
+          expect(response.status()).toBe(200);
 
-        const body = await response.json();
-        expect(body.job).toBe('captain');
-        expect(body.name).toBeUndefined();
-        expect(Number.isNaN(Date.parse(body.updatedAt))).toBe(false);
+          const body = await response.json();
+          expect(body.job).toBe('captain');
+          expect(body.name).toBeUndefined();
+          expect(Number.isNaN(Date.parse(body.updatedAt))).toBe(false);
+        });
       }
     );
 
@@ -150,10 +169,12 @@ test.describe(
         tag: ['@positive'],
       },
       async ({ request }) => {
-        const response = await request.delete('users/2');
+        const response = await test.step('Delete user', async () => request.delete('users/2'));
 
-        expect(response.status()).toBe(204);
-        expect(await response.text()).toBe('');
+        await test.step('Verify 204 with empty body', async () => {
+          expect(response.status()).toBe(204);
+          expect(await response.text()).toBe('');
+        });
       }
     );
 
@@ -168,17 +189,21 @@ test.describe(
         tag: ['@negative'],
       },
       async ({ request }) => {
-        const response = await request.post('users', {
-          headers: { 'Content-Type': 'text/plain' },
-          data: JSON.stringify({ name: 'morpheus', job: 'leader' }),
+        const response = await test.step('Create user with text/plain content type', async () =>
+          request.post('users', {
+            headers: { 'Content-Type': 'text/plain' },
+            data: JSON.stringify({ name: 'morpheus', job: 'leader' }),
+          })
+        );
+
+        await test.step('Verify sent fields are not saved', async () => {
+          expect(response.status()).toBe(201);
+
+          const body = await response.json();
+          expect(typeof body.id).toBe('string');
+          expect(body.name).toBeUndefined();
+          expect(body.job).toBeUndefined();
         });
-
-        expect(response.status()).toBe(201);
-
-        const body = await response.json();
-        expect(typeof body.id).toBe('string');
-        expect(body.name).toBeUndefined();
-        expect(body.job).toBeUndefined();
       }
     );
 
@@ -193,13 +218,15 @@ test.describe(
         tag: ['@negative'],
       },
       async ({ request }) => {
-        const response = await request.get('users/23');
+        const response = await test.step('Fetch non-existent user', async () => request.get('users/23'));
 
-        expect(response.status()).toBe(404);
+        await test.step('Verify 404 with no user data', async () => {
+          expect(response.status()).toBe(404);
 
-        const body = await response.json();
-        expect(body.data?.id).toBeUndefined();
-        expect(body.data?.email ?? null).toBeNull();
+          const body = await response.json();
+          expect(body.data?.id).toBeUndefined();
+          expect(body.data?.email ?? null).toBeNull();
+        });
       }
     );
   }
