@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { z } from 'zod';
 import { createBooking, getToken, toJson } from './booking-utils';
 
 const booking = {
@@ -10,12 +11,35 @@ const booking = {
   additionalneeds: 'Breakfast',
 };
 
+const bookingSchema = z.object({
+  firstname: z.string(),
+  lastname: z.string(),
+  totalprice: z.number(),
+  depositpaid: z.boolean(),
+  bookingdates: z.object({ checkin: z.string(), checkout: z.string() }),
+  additionalneeds: z.string().optional(),
+});
+
 test.describe(
   'Bookings — API',
   {
     tag: ['@bookings'],
   },
   () => {
+    let token: string;
+    let bookingId: number;
+
+    test.beforeEach(async ({ request }) => {
+      token = await getToken(request);
+      bookingId = await createBooking(request, booking);
+    });
+
+    test.afterEach(async ({ request }) => {
+      await request.delete(`booking/${bookingId}`, {
+        headers: { Cookie: `token=${token}` },
+      });
+    });
+
     // ============================================================
     // TC-BOOKING-001: Deleting a booking with a valid token removes
     // it, and fetching the same booking afterwards returns 404
@@ -27,9 +51,6 @@ test.describe(
         tag: ['@smoke', '@positive'],
       },
       async ({ request }) => {
-        const token = await test.step('Get auth token', async () => getToken(request));
-        const bookingId = await test.step('Create booking', async () => createBooking(request, booking));
-
         await test.step('Verify booking was created', async () => {
           const createdResponse = await request.get(`booking/${bookingId}`);
           expect(createdResponse.status()).toBe(200);
@@ -61,7 +82,6 @@ test.describe(
         tag: ['@negative'],
       },
       async ({ request }) => {
-        const bookingId = await test.step('Create booking', async () => createBooking(request, booking));
         const update = { additionalneeds: 'Lunch' };
 
         await test.step('Update with stale token is rejected', async () => {
@@ -131,8 +151,6 @@ test.describe(
         tag: ['@positive'],
       },
       async ({ request }) => {
-        const bookingId = await test.step('Create booking', async () => createBooking(request, booking));
-
         await test.step('Fetch booking within 3 seconds', async () => {
           const start = Date.now();
           const response = await request.get(`booking/${bookingId}`);
@@ -140,6 +158,96 @@ test.describe(
 
           expect(response.status()).toBe(200);
           expect(durationMs).toBeLessThan(3000);
+        });
+      }
+    );
+
+    // ============================================================
+    // TC-BOOKING-005: A booking goes through the full CRUD flow:
+    // created, read with a valid schema, updated, the update is
+    // saved, deleted, and then returns 404
+    // ============================================================
+    test(
+      '[TC-BOOKING-005] booking full CRUD flow',
+      {
+        annotation: [{ type: 'test-case', description: 'TC-BOOKING-005' }],
+        tag: ['@smoke', '@positive'],
+      },
+      async ({ request }) => {
+        const updated = { ...booking, firstname: 'James', totalprice: 222 };
+
+        await test.step('Read booking and verify schema', async () => {
+          const response = await request.get(`booking/${bookingId}`);
+          expect(response.status()).toBe(200);
+
+          const body = await toJson(response);
+          expect(bookingSchema.safeParse(body).error).toBeUndefined();
+          expect(body.firstname).toBe(booking.firstname);
+        });
+
+        await test.step('Update booking with PUT', async () => {
+          const response = await request.put(`booking/${bookingId}`, {
+            headers: { Cookie: `token=${token}` },
+            data: updated,
+          });
+          expect(response.status()).toBe(200);
+        });
+
+        await test.step('Verify update is saved', async () => {
+          const saved = await toJson(await request.get(`booking/${bookingId}`));
+          expect(saved.firstname).toBe(updated.firstname);
+          expect(saved.totalprice).toBe(updated.totalprice);
+        });
+
+        await test.step('Delete booking', async () => {
+          const response = await request.delete(`booking/${bookingId}`, {
+            headers: { Cookie: `token=${token}` },
+          });
+          expect(response.status()).toBe(201);
+        });
+
+        await test.step('Verify deleted booking returns 404', async () => {
+          const response = await request.get(`booking/${bookingId}`);
+          expect(response.status()).toBe(404);
+        });
+      }
+    );
+
+    // ============================================================
+    // TC-BOOKING-006: Each test works on its own booking, so
+    // changing another booking does not affect it
+    // ============================================================
+    test(
+      '[TC-BOOKING-006] changing another booking does not affect this booking',
+      {
+        annotation: [{ type: 'test-case', description: 'TC-BOOKING-006' }],
+        tag: ['@positive'],
+      },
+      async ({ request }) => {
+        const otherBookingId = await test.step('Create another booking', async () =>
+          createBooking(request, booking)
+        );
+
+        await test.step('Update and delete the other booking', async () => {
+          const updateResponse = await request.patch(`booking/${otherBookingId}`, {
+            headers: { Cookie: `token=${token}` },
+            data: { firstname: 'Changed' },
+          });
+          expect(updateResponse.status()).toBe(200);
+
+          const deleteResponse = await request.delete(`booking/${otherBookingId}`, {
+            headers: { Cookie: `token=${token}` },
+          });
+          expect(deleteResponse.status()).toBe(201);
+        });
+
+        await test.step('Verify this booking is unchanged', async () => {
+          const response = await request.get(`booking/${bookingId}`);
+          expect(response.status()).toBe(200);
+
+          const saved = await toJson(response);
+          expect(saved.firstname).toBe(booking.firstname);
+          expect(saved.additionalneeds).toBe(booking.additionalneeds);
         });
       }
     );
