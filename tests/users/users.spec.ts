@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { z } from 'zod';
+import { buildUser, type User } from './user-data';
 import { createUser } from './user-utils';
 
 const userSchema = z.object({
@@ -78,7 +79,7 @@ test.describe(
         });
 
         await test.step('Verify every user is well-formed', async () => {
-          const users: Array<{ id: unknown; email: unknown; first_name: unknown }> = body.data;
+          const users: User[] = body.data;
           const allUsersValid = users.every(
             (user) =>
               typeof user.id === 'number' &&
@@ -103,7 +104,7 @@ test.describe(
         tag: ['@smoke', '@positive'],
       },
       async ({ request }) => {
-        const newUser = { name: 'morpheus', job: 'leader' };
+        const newUser = buildUser();
 
         const response = await test.step('Create user', async () => request.post('users', { data: newUser }));
 
@@ -131,10 +132,8 @@ test.describe(
         tag: ['@positive'],
       },
       async ({ request }) => {
-        const replacement = { name: 'morpheus', job: 'zion resident' };
-        const userId = await test.step('Create user', async () =>
-          createUser(request, { name: 'morpheus', job: 'leader' })
-        );
+        const replacement = buildUser({ job: 'zion resident' });
+        const userId = await test.step('Create user', async () => createUser(request, buildUser()));
 
         const response = await test.step('Replace user with PUT', async () =>
           request.put(`users/${userId}`, { data: replacement })
@@ -162,9 +161,7 @@ test.describe(
         tag: ['@positive'],
       },
       async ({ request }) => {
-        const userId = await test.step('Create user', async () =>
-          createUser(request, { name: 'morpheus', job: 'leader' })
-        );
+        const userId = await test.step('Create user', async () => createUser(request, buildUser()));
 
         const response = await test.step('Update only job with PATCH', async () =>
           request.patch(`users/${userId}`, { data: { job: 'captain' } })
@@ -191,9 +188,7 @@ test.describe(
         tag: ['@positive'],
       },
       async ({ request }) => {
-        const userId = await test.step('Create user', async () =>
-          createUser(request, { name: 'morpheus', job: 'leader' })
-        );
+        const userId = await test.step('Create user', async () => createUser(request, buildUser()));
 
         const response = await test.step('Delete user', async () => request.delete(`users/${userId}`));
 

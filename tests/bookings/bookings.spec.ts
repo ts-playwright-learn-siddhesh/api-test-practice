@@ -1,15 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { z } from 'zod';
-import { createBooking, getToken, toJson } from './booking-utils';
+import { BookingClient } from './booking-client';
+import { buildBooking } from './booking-data';
 
-const booking = {
-  firstname: 'Jim',
-  lastname: 'Brown',
-  totalprice: 111,
-  depositpaid: true,
-  bookingdates: { checkin: '2026-01-01', checkout: '2026-01-02' },
-  additionalneeds: 'Breakfast',
-};
+const booking = buildBooking();
 
 const bookingSchema = z.object({
   firstname: z.string(),
@@ -26,18 +20,17 @@ test.describe(
     tag: ['@bookings'],
   },
   () => {
-    let token: string;
+    let client: BookingClient;
     let bookingId: number;
 
     test.beforeEach(async ({ request }) => {
-      token = await getToken(request);
-      bookingId = await createBooking(request, booking);
+      client = new BookingClient(request);
+      await client.auth();
+      bookingId = await client.create(booking);
     });
 
-    test.afterEach(async ({ request }) => {
-      await request.delete(`booking/${bookingId}`, {
-        headers: { Cookie: `token=${token}` },
-      });
+    test.afterEach(async () => {
+      await client.delete(bookingId);
     });
 
     // ============================================================
@@ -50,21 +43,19 @@ test.describe(
         annotation: [{ type: 'test-case', description: 'TC-BOOKING-001' }],
         tag: ['@smoke', '@positive'],
       },
-      async ({ request }) => {
+      async () => {
         await test.step('Verify booking was created', async () => {
-          const createdResponse = await request.get(`booking/${bookingId}`);
+          const createdResponse = await client.get(bookingId);
           expect(createdResponse.status()).toBe(200);
         });
 
         await test.step('Delete booking', async () => {
-          const deleteResponse = await request.delete(`booking/${bookingId}`, {
-            headers: { Cookie: `token=${token}` },
-          });
+          const deleteResponse = await client.delete(bookingId);
           expect(deleteResponse.status()).toBe(201);
         });
 
         await test.step('Verify deleted booking returns 404', async () => {
-          const getResponse = await request.get(`booking/${bookingId}`);
+          const getResponse = await client.get(bookingId);
           expect(getResponse.status()).toBe(404);
         });
       }
@@ -81,29 +72,23 @@ test.describe(
         annotation: [{ type: 'test-case', description: 'TC-BOOKING-002' }],
         tag: ['@negative'],
       },
-      async ({ request }) => {
+      async () => {
         const update = { additionalneeds: 'Lunch' };
 
         await test.step('Update with stale token is rejected', async () => {
-          const staleResponse = await request.patch(`booking/${bookingId}`, {
-            headers: { Cookie: 'token=stale-token' },
-            data: update,
-          });
+          const staleResponse = await client.patch(bookingId, update, 'stale-token');
           expect(staleResponse.status()).toBe(403);
         });
 
         await test.step('Retry update with new token', async () => {
-          const newToken = await getToken(request);
-          const retryResponse = await request.patch(`booking/${bookingId}`, {
-            headers: { Cookie: `token=${newToken}` },
-            data: update,
-          });
+          await client.auth();
+          const retryResponse = await client.patch(bookingId, update);
           expect(retryResponse.status()).toBe(200);
         });
 
         await test.step('Verify change is saved', async () => {
-          const getResponse = await request.get(`booking/${bookingId}`);
-          const saved = await toJson(getResponse);
+          const getResponse = await client.get(bookingId);
+          const saved = await getResponse.json();
           expect(saved.additionalneeds).toBe('Lunch');
         });
       }
@@ -119,22 +104,21 @@ test.describe(
         annotation: [{ type: 'test-case', description: 'TC-BOOKING-003' }],
         tag: ['@positive'],
       },
-      async ({ request }) => {
-        const specialBooking = {
-          ...booking,
+      async () => {
+        const specialBooking = buildBooking({
           firstname: 'José',
           lastname: "O'Brien & Sons/李",
-        };
+        });
 
         const bookingId = await test.step('Create booking with special characters', async () =>
-          createBooking(request, specialBooking)
+          client.create(specialBooking)
         );
 
         await test.step('Verify first and last name are saved unchanged', async () => {
-          const response = await request.get(`booking/${bookingId}`);
+          const response = await client.get(bookingId);
           expect(response.status()).toBe(200);
 
-          const saved = await toJson(response);
+          const saved = await response.json();
           expect(saved.firstname).toBe(specialBooking.firstname);
           expect(saved.lastname).toBe(specialBooking.lastname);
         });
@@ -150,10 +134,10 @@ test.describe(
         annotation: [{ type: 'test-case', description: 'TC-BOOKING-004' }],
         tag: ['@positive'],
       },
-      async ({ request }) => {
+      async () => {
         await test.step('Fetch booking within 3 seconds', async () => {
           const start = Date.now();
-          const response = await request.get(`booking/${bookingId}`);
+          const response = await client.get(bookingId);
           const durationMs = Date.now() - start;
 
           expect(response.status()).toBe(200);
@@ -173,41 +157,36 @@ test.describe(
         annotation: [{ type: 'test-case', description: 'TC-BOOKING-005' }],
         tag: ['@smoke', '@positive'],
       },
-      async ({ request }) => {
-        const updated = { ...booking, firstname: 'James', totalprice: 222 };
+      async () => {
+        const updated = buildBooking({ firstname: 'James', totalprice: 222 });
 
         await test.step('Read booking and verify schema', async () => {
-          const response = await request.get(`booking/${bookingId}`);
+          const response = await client.get(bookingId);
           expect(response.status()).toBe(200);
 
-          const body = await toJson(response);
+          const body = await response.json();
           expect(bookingSchema.safeParse(body).error).toBeUndefined();
           expect(body.firstname).toBe(booking.firstname);
         });
 
         await test.step('Update booking with PUT', async () => {
-          const response = await request.put(`booking/${bookingId}`, {
-            headers: { Cookie: `token=${token}` },
-            data: updated,
-          });
+          const response = await client.update(bookingId, updated);
           expect(response.status()).toBe(200);
         });
 
         await test.step('Verify update is saved', async () => {
-          const saved = await toJson(await request.get(`booking/${bookingId}`));
+          const saved = await (await client.get(bookingId)).json();
           expect(saved.firstname).toBe(updated.firstname);
           expect(saved.totalprice).toBe(updated.totalprice);
         });
 
         await test.step('Delete booking', async () => {
-          const response = await request.delete(`booking/${bookingId}`, {
-            headers: { Cookie: `token=${token}` },
-          });
+          const response = await client.delete(bookingId);
           expect(response.status()).toBe(201);
         });
 
         await test.step('Verify deleted booking returns 404', async () => {
-          const response = await request.get(`booking/${bookingId}`);
+          const response = await client.get(bookingId);
           expect(response.status()).toBe(404);
         });
       }
@@ -223,29 +202,22 @@ test.describe(
         annotation: [{ type: 'test-case', description: 'TC-BOOKING-006' }],
         tag: ['@positive'],
       },
-      async ({ request }) => {
-        const otherBookingId = await test.step('Create another booking', async () =>
-          createBooking(request, booking)
-        );
+      async () => {
+        const otherBookingId = await test.step('Create another booking', async () => client.create(booking));
 
         await test.step('Update and delete the other booking', async () => {
-          const updateResponse = await request.patch(`booking/${otherBookingId}`, {
-            headers: { Cookie: `token=${token}` },
-            data: { firstname: 'Changed' },
-          });
+          const updateResponse = await client.patch(otherBookingId, { firstname: 'Changed' });
           expect(updateResponse.status()).toBe(200);
 
-          const deleteResponse = await request.delete(`booking/${otherBookingId}`, {
-            headers: { Cookie: `token=${token}` },
-          });
+          const deleteResponse = await client.delete(otherBookingId);
           expect(deleteResponse.status()).toBe(201);
         });
 
         await test.step('Verify this booking is unchanged', async () => {
-          const response = await request.get(`booking/${bookingId}`);
+          const response = await client.get(bookingId);
           expect(response.status()).toBe(200);
 
-          const saved = await toJson(response);
+          const saved = await response.json();
           expect(saved.firstname).toBe(booking.firstname);
           expect(saved.additionalneeds).toBe(booking.additionalneeds);
         });
