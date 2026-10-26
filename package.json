@@ -21,6 +21,7 @@
   },
   "homepage": "https://github.com/ts-playwright-learn-siddhesh/api-test-practice#readme",
   "devDependencies": {
+    "@faker-js/faker": "^10.6.0",
     "@playwright/test": "^1.63.0",
     "@types/node": "^26.6.3",
     "typescript": "^7.0.2",

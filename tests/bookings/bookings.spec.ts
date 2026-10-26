@@ -23,13 +23,13 @@ test.describe(
     let client: BookingClient;
     let bookingId: number;
 
-    test.beforeEach(async ({ request }) => {
+    test.beforeEach('Authenticate and create a booking for the test', async ({ request }) => {
       client = new BookingClient(request);
       await client.auth();
       bookingId = await client.create(booking);
     });
 
-    test.afterEach(async () => {
+    test.afterEach('Delete the booking created for the test', async () => {
       await client.delete(bookingId);
     });
 
@@ -38,7 +38,7 @@ test.describe(
     // it, and fetching the same booking afterwards returns 404
     // ============================================================
     test(
-      '[TC-BOOKING-001] deleted booking can no longer be fetched',
+      '[TC-BOOKING-001] fetching the deleted booking should return not found (404)',
       {
         annotation: [{ type: 'test-case', description: 'TC-BOOKING-001' }],
         tag: ['@smoke', '@positive'],
@@ -147,19 +147,15 @@ test.describe(
     );
 
     // ============================================================
-    // TC-BOOKING-005: A booking goes through the full CRUD flow:
-    // created, read with a valid schema, updated, the update is
-    // saved, deleted, and then returns 404
+    // TC-BOOKING-005a: A created booking is read with a valid schema
     // ============================================================
     test(
-      '[TC-BOOKING-005] booking full CRUD flow',
+      '[TC-BOOKING-005a] reading a booking returns a valid schema',
       {
-        annotation: [{ type: 'test-case', description: 'TC-BOOKING-005' }],
+        annotation: [{ type: 'test-case', description: 'TC-BOOKING-005a' }],
         tag: ['@smoke', '@positive'],
       },
       async () => {
-        const updated = buildBooking({ firstname: 'James', totalprice: 222 });
-
         await test.step('Read booking and verify schema', async () => {
           const response = await client.get(bookingId);
           expect(response.status()).toBe(200);
@@ -168,6 +164,20 @@ test.describe(
           expect(bookingSchema.safeParse(body).error).toBeUndefined();
           expect(body.firstname).toBe(booking.firstname);
         });
+      }
+    );
+
+    // ============================================================
+    // TC-BOOKING-005b: Updating a booking with PUT saves the update
+    // ============================================================
+    test(
+      '[TC-BOOKING-005b] updating a booking with PUT saves the update',
+      {
+        annotation: [{ type: 'test-case', description: 'TC-BOOKING-005b' }],
+        tag: ['@smoke', '@positive'],
+      },
+      async () => {
+        const updated = buildBooking({ firstname: 'James', totalprice: 222 });
 
         await test.step('Update booking with PUT', async () => {
           const response = await client.update(bookingId, updated);
@@ -179,41 +189,31 @@ test.describe(
           expect(saved.firstname).toBe(updated.firstname);
           expect(saved.totalprice).toBe(updated.totalprice);
         });
-
-        await test.step('Delete booking', async () => {
-          const response = await client.delete(bookingId);
-          expect(response.status()).toBe(201);
-        });
-
-        await test.step('Verify deleted booking returns 404', async () => {
-          const response = await client.get(bookingId);
-          expect(response.status()).toBe(404);
-        });
       }
     );
 
     // ============================================================
-    // TC-BOOKING-006: Each test works on its own booking, so
-    // changing another booking does not affect it
+    // TC-BOOKING-006: Updating and deleting a second booking does
+    // not change the booking created in beforeEach
     // ============================================================
     test(
-      '[TC-BOOKING-006] changing another booking does not affect this booking',
+      '[TC-BOOKING-006] updating and deleting a second booking does not change the booking created in beforeEach',
       {
         annotation: [{ type: 'test-case', description: 'TC-BOOKING-006' }],
         tag: ['@positive'],
       },
       async () => {
-        const otherBookingId = await test.step('Create another booking', async () => client.create(booking));
+        const secondBookingId = await test.step('Create a second booking', async () => client.create(booking));
 
-        await test.step('Update and delete the other booking', async () => {
-          const updateResponse = await client.patch(otherBookingId, { firstname: 'Changed' });
+        await test.step('Update and delete the second booking', async () => {
+          const updateResponse = await client.patch(secondBookingId, { firstname: 'Changed' });
           expect(updateResponse.status()).toBe(200);
 
-          const deleteResponse = await client.delete(otherBookingId);
+          const deleteResponse = await client.delete(secondBookingId);
           expect(deleteResponse.status()).toBe(201);
         });
 
-        await test.step('Verify this booking is unchanged', async () => {
+        await test.step('Verify the booking created in beforeEach is unchanged', async () => {
           const response = await client.get(bookingId);
           expect(response.status()).toBe(200);
 
