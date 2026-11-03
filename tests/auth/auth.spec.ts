@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { faker } from '@faker-js/faker';
+import { test, expect } from '../fixtures';
 
 test.describe(
   'Authentication — Access',
@@ -17,9 +18,9 @@ test.describe(
         annotation: [{ type: 'test-case', description: 'TC-AUTH-001' }],
         tag: ['@smoke', '@negative'],
       },
-      async ({ request }) => {
+      async ({ authService }) => {
         const response = await test.step('Request current user without authorization header', async () =>
-          request.get('auth/me')
+          authService.me()
         );
 
         await test.step('Verify request is rejected with 401', async () => {
@@ -28,6 +29,32 @@ test.describe(
           const body = await response.json();
           expect(body.message).toBe('Access Token is required');
           expect(body.id).toBeUndefined();
+        });
+      }
+    );
+
+    // ============================================================
+    // TC-AUTH-002: Logging in with a valid username and a wrong
+    // password is rejected with 400, an "Invalid credentials"
+    // message and no access token
+    // ============================================================
+    test(
+      '[TC-AUTH-002] login with a wrong password is rejected with 400',
+      {
+        annotation: [{ type: 'test-case', description: 'TC-AUTH-002' }],
+        tag: ['@negative'],
+      },
+      async ({ authService }) => {
+        const response = await test.step('Log in with a wrong password', async () =>
+          authService.login(process.env.DUMMYJSON_USERNAME ?? '', faker.internet.password())
+        );
+
+        await test.step('Verify login is rejected with 400 and no access token', async () => {
+          expect(response.status()).toBe(400);
+
+          const body = await response.json();
+          expect(body.message).toBe('Invalid credentials');
+          expect(body.accessToken).toBeUndefined();
         });
       }
     );
