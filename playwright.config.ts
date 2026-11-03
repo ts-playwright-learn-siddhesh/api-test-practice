@@ -1,9 +1,5 @@
-import { existsSync } from 'node:fs';
-import { defineConfig } from '@playwright/test';
-
-if (existsSync('.env')) {
-  process.loadEnvFile('.env');
-}
+import { defineConfig, devices } from '@playwright/test';
+import { env } from './environments';
 
 export default defineConfig({
   testDir: './tests',
@@ -22,17 +18,21 @@ export default defineConfig({
     {
       name: 'reqres',
       testDir: './tests/users',
-      use: { baseURL: 'https://reqres.in/api/' },
+      use: { baseURL: env.reqresUrl },
     },
     {
       name: 'dummyjson',
-      testDir: './tests/auth',
-      use: { baseURL: 'https://dummyjson.com/' },
+      testMatch: ['auth/**/*.spec.ts', 'carts/**/*.spec.ts'],
     },
     {
       name: 'restful-booker',
       testDir: './tests/bookings',
-      use: { baseURL: 'https://restful-booker.herokuapp.com/' },
+    },
+    {
+      name: 'platform-ui',
+      testDir: './tests/messages',
+      // Browser pages need the default Accept header, not the JSON-only one
+      use: { ...devices['Desktop Chrome'], baseURL: env.platformUrl, extraHTTPHeaders: {} },
     },
   ],
 });

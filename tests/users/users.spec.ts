@@ -1,4 +1,17 @@
 import { test, expect } from '@playwright/test';
+import { z } from 'zod';
+import { buildUser, type User } from './user-data';
+import { createUser } from './user-utils';
+
+const userSchema = z.object({
+  data: z.object({
+    id: z.number(),
+    email: z.string(),
+    first_name: z.string(),
+    last_name: z.string(),
+    avatar: z.string(),
+  }),
+});
 
 test.describe(
   'Users — API',
@@ -8,7 +21,7 @@ test.describe(
   () => {
     // ============================================================
     // TC-USERS-001: Fetching a created user by id returns 200 with
-    // JSON content and that user's id and email
+    // JSON content, that user's id and email, and matches the user schema
     // ============================================================
     test(
       '[TC-USERS-001] fetching a created user returns that user',
@@ -34,6 +47,7 @@ test.describe(
           const body = await response.json();
           expect(body.data.id).toBe(createdUser.id);
           expect(body.data.email).toBe(newUser.email);
+          expect(userSchema.safeParse(body).error).toBeUndefined();
         });
       }
     );
@@ -60,10 +74,12 @@ test.describe(
           expect(body.page).toBe(2);
           expect(body.per_page).toBe(6);
           expect(body.data.length).toBe(body.per_page);
+          expect(typeof body.total).toBe('number');
+          expect(body.total_pages).toBe(Math.ceil(body.total / body.per_page));
         });
 
         await test.step('Verify every user is well-formed', async () => {
-          const users: Array<{ id: unknown; email: unknown; first_name: unknown }> = body.data;
+          const users: User[] = body.data;
           const allUsersValid = users.every(
             (user) =>
               typeof user.id === 'number' &&
@@ -88,7 +104,7 @@ test.describe(
         tag: ['@smoke', '@positive'],
       },
       async ({ request }) => {
-        const newUser = { name: 'morpheus', job: 'leader' };
+        const newUser = buildUser();
 
         const response = await test.step('Create user', async () => request.post('users', { data: newUser }));
 
@@ -116,10 +132,11 @@ test.describe(
         tag: ['@positive'],
       },
       async ({ request }) => {
-        const replacement = { name: 'morpheus', job: 'zion resident' };
+        const replacement = buildUser({ job: 'zion resident' });
+        const userId = await test.step('Create user', async () => createUser(request, buildUser()));
 
         const response = await test.step('Replace user with PUT', async () =>
-          request.put('users/2', { data: replacement })
+          request.put(`users/${userId}`, { data: replacement })
         );
 
         await test.step('Verify new name, job and updatedAt are returned', async () => {
@@ -144,8 +161,10 @@ test.describe(
         tag: ['@positive'],
       },
       async ({ request }) => {
+        const userId = await test.step('Create user', async () => createUser(request, buildUser()));
+
         const response = await test.step('Update only job with PATCH', async () =>
-          request.patch('users/2', { data: { job: 'captain' } })
+          request.patch(`users/${userId}`, { data: { job: 'captain' } })
         );
 
         await test.step('Verify only job is changed', async () => {
@@ -169,7 +188,9 @@ test.describe(
         tag: ['@positive'],
       },
       async ({ request }) => {
-        const response = await test.step('Delete user', async () => request.delete('users/2'));
+        const userId = await test.step('Create user', async () => createUser(request, buildUser()));
+
+        const response = await test.step('Delete user', async () => request.delete(`users/${userId}`));
 
         await test.step('Verify 204 with empty body', async () => {
           expect(response.status()).toBe(204);
