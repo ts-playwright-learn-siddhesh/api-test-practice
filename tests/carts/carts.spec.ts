@@ -1,14 +1,33 @@
 import { faker } from '@faker-js/faker';
+import { z } from 'zod';
 import type { CurrentUser } from '../auth/auth-service';
 import { test, expect } from '../fixtures';
 
 const validItem = { id: 1, quantity: 1 };
 const unknownId = 999999;
 
+const cartSchema = z.object({
+  id: z.number(),
+  userId: z.number(),
+  products: z.array(
+    z.object({
+      id: z.number(),
+      title: z.string(),
+      price: z.number(),
+      quantity: z.number(),
+      total: z.number(),
+    })
+  ),
+  total: z.number(),
+  discountedTotal: z.number(),
+  totalProducts: z.number(),
+  totalQuantity: z.number(),
+});
+
 test.describe(
   'Carts — API',
   {
-    tag: ['@carts'],
+    tag: ['@carts', '@regression'],
   },
   () => {
     // ============================================================
@@ -44,6 +63,7 @@ test.describe(
         );
 
         await test.step('Verify the cart belongs to the user and holds the product', async () => {
+          expect(cartSchema.safeParse(cart).error).toBeUndefined();
           expect(cart.userId).toBe(user.id);
           expect(cart.products).toHaveLength(1);
           expect(cart.products[0].id).toBe(product.id);

@@ -6,7 +6,7 @@ const errorSchema = z.object({ message: z.string().min(1) }).strict();
 test.describe(
   'Errors — Consistency',
   {
-    tag: ['@errors'],
+    tag: ['@errors', '@regression'],
   },
   () => {
     // ============================================================

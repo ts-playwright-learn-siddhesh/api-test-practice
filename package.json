@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "playwright test",
+    "test:smoke": "playwright test --grep @smoke",
     "report": "playwright show-report",
     "typecheck": "tsc"
   },

@@ -11,7 +11,7 @@ async function productTotal(productService: ProductService): Promise<number> {
 test.describe(
   'Products — Boundaries',
   {
-    tag: ['@products'],
+    tag: ['@products', '@regression'],
   },
   () => {
     // ============================================================

@@ -17,7 +17,7 @@ const bookingSchema = z.object({
 test.describe(
   'Bookings — API',
   {
-    tag: ['@bookings'],
+    tag: ['@bookings', '@regression'],
   },
   () => {
     let client: BookingService;
