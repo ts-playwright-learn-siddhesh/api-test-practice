@@ -1,6 +1,6 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 import { z } from 'zod';
-import { BookingClient } from './booking-client';
+import type { BookingService } from './booking-service';
 import { buildBooking } from './booking-data';
 
 const booking = buildBooking();
@@ -20,12 +20,11 @@ test.describe(
     tag: ['@bookings'],
   },
   () => {
-    let client: BookingClient;
+    let client: BookingService;
     let bookingId: number;
 
-    test.beforeEach('Authenticate and create a booking for the test', async ({ request }) => {
-      client = new BookingClient(request);
-      await client.auth();
+    test.beforeEach('Create a booking for the test with the authenticated booking service', async ({ bookingService }) => {
+      client = bookingService;
       bookingId = await client.create(booking);
     });
 
@@ -220,6 +219,37 @@ test.describe(
           const saved = await response.json();
           expect(saved.firstname).toBe(booking.firstname);
           expect(saved.additionalneeds).toBe(booking.additionalneeds);
+        });
+      }
+    );
+
+    // ============================================================
+    // TC-BOOKING-007: Searching bookings by first and last name
+    // returns the id of the booking created in the test
+    // ============================================================
+    test(
+      '[TC-BOOKING-007] searching bookings by first and last name returns the created booking',
+      {
+        annotation: [{ type: 'test-case', description: 'TC-BOOKING-007' }],
+        tag: ['@positive'],
+      },
+      async () => {
+        const searchBooking = buildBooking();
+
+        const searchBookingId = await test.step('Create booking to search for', async () =>
+          client.create(searchBooking)
+        );
+
+        const results = await test.step('Search bookings by first and last name', async () =>
+          client.findByName(searchBooking.firstname, searchBooking.lastname)
+        );
+
+        await test.step('Verify the created booking is in the results', async () => {
+          expect(results.map((result) => result.bookingid)).toContain(searchBookingId);
+        });
+
+        await test.step('Delete the created booking', async () => {
+          await client.delete(searchBookingId);
         });
       }
     );
