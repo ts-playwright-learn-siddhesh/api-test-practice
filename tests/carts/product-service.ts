@@ -1,3 +1,4 @@
+import type { APIResponse } from '@playwright/test';
 import { ApiClient } from '../api-client';
 
 export interface Product {
@@ -6,8 +7,11 @@ export interface Product {
   price: number;
 }
 
-interface ProductList {
+export interface ProductList {
   products: Product[];
+  total: number;
+  skip: number;
+  limit: number;
 }
 
 export class ProductService extends ApiClient {
@@ -17,5 +21,13 @@ export class ProductService extends ApiClient {
     });
     const body = await this.parse<ProductList>(response, 200);
     return body.products;
+  }
+
+  list(params: { limit?: number; skip?: number }): Promise<APIResponse> {
+    return this.request.get(this.url('products'), { params: { ...params, select: 'id' } });
+  }
+
+  get(id: number): Promise<APIResponse> {
+    return this.request.get(this.url(`products/${id}`), { params: { select: 'id' } });
   }
 }

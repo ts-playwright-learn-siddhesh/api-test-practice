@@ -22,7 +22,7 @@ export default defineConfig({
     },
     {
       name: 'dummyjson',
-      testMatch: ['auth/**/*.spec.ts', 'carts/**/*.spec.ts'],
+      testMatch: ['auth/**/*.spec.ts', 'carts/**/*.spec.ts', 'errors/**/*.spec.ts'],
     },
     {
       name: 'restful-booker',

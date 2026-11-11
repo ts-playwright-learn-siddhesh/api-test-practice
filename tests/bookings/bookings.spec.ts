@@ -253,5 +253,27 @@ test.describe(
         });
       }
     );
+
+    // ============================================================
+    // TC-BOOKING-008: A newly created booking becomes searchable;
+    // the search is polled until the booking id is returned
+    // ============================================================
+    test(
+      '[TC-BOOKING-008] created booking appears in search results when polled',
+      {
+        annotation: [{ type: 'test-case', description: 'TC-BOOKING-008' }],
+        tag: ['@positive'],
+      },
+      async () => {
+        await test.step('Poll search until the booking created in beforeEach is returned', async () => {
+          await expect
+            .poll(
+              async () => (await client.findByName(booking.firstname, booking.lastname)).map((result) => result.bookingid),
+              { intervals: [500, 1000, 2000], timeout: 10_000 }
+            )
+            .toContain(bookingId);
+        });
+      }
+    );
   }
 );
