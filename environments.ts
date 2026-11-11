@@ -11,17 +11,25 @@ export interface Environment {
   platformUrl: string;
 }
 
+function requireEnv(key: string): string {
+  const value = process.env[key];
+  if (!value) {
+    throw new Error(`Missing environment variable "${key}". Add it to .env`);
+  }
+  return value;
+}
+
 const prod: Environment = {
-  reqresUrl: 'https://reqres.in/api/',
-  dummyjsonUrl: 'https://dummyjson.com/',
-  bookerUrl: 'https://restful-booker.herokuapp.com/',
-  platformUrl: 'https://automationintesting.online/',
+  reqresUrl: requireEnv('REQRES_URL'),
+  dummyjsonUrl: requireEnv('DUMMYJSON_URL'),
+  bookerUrl: requireEnv('BOOKER_URL'),
+  platformUrl: requireEnv('PLATFORM_URL'),
 };
 
 const environments: Record<string, Environment> = {
   prod,
   // Restful Booker running locally: docker run -p 3001:3001 mwinteringham/restfulbooker
-  local: { ...prod, bookerUrl: 'http://localhost:3001/' },
+  local: { ...prod, bookerUrl: process.env.LOCAL_BOOKER_URL ?? 'http://localhost:3001/' },
 };
 
 const name = process.env.TEST_ENV ?? 'prod';

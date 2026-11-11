@@ -225,7 +225,7 @@ test.describe(
 
     // ============================================================
     // TC-BOOKING-007: Searching bookings by first and last name
-    // returns the id of the booking created in beforeEach
+    // returns the id of the booking created in the test
     // ============================================================
     test(
       '[TC-BOOKING-007] searching bookings by first and last name returns the created booking',
@@ -234,12 +234,22 @@ test.describe(
         tag: ['@positive'],
       },
       async () => {
+        const searchBooking = buildBooking();
+
+        const searchBookingId = await test.step('Create booking to search for', async () =>
+          client.create(searchBooking)
+        );
+
         const results = await test.step('Search bookings by first and last name', async () =>
-          client.findByName(booking.firstname, booking.lastname)
+          client.findByName(searchBooking.firstname, searchBooking.lastname)
         );
 
         await test.step('Verify the created booking is in the results', async () => {
-          expect(results.map((result) => result.bookingid)).toContain(bookingId);
+          expect(results.map((result) => result.bookingid)).toContain(searchBookingId);
+        });
+
+        await test.step('Delete the created booking', async () => {
+          await client.delete(searchBookingId);
         });
       }
     );

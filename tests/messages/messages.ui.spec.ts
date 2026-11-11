@@ -30,7 +30,8 @@ test.describe(
           await page.getByLabel('Username').fill(process.env.PLATFORM_ADMIN_USERNAME ?? '');
           await page.getByLabel('Password').fill(process.env.PLATFORM_ADMIN_PASSWORD ?? '');
           await page.getByRole('button', { name: 'Login' }).click();
-          await expect(page).toHaveURL(/admin\/rooms/);
+          // The demo site can take longer than the default 5s to redirect after login
+          await expect(page).toHaveURL(/admin\/rooms/, { timeout: 15_000 });
         });
 
         await test.step('Verify the message is listed in the inbox', async () => {
