@@ -4,7 +4,7 @@ import { buildMessage } from './message-data';
 test.describe(
   'Messages — API + UI',
   {
-    tag: ['@messages'],
+    tag: ['@messages', '@regression'],
   },
   () => {
     // ============================================================

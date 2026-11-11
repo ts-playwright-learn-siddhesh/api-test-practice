@@ -16,7 +16,7 @@ const userSchema = z.object({
 test.describe(
   'Users — API',
   {
-    tag: ['@users'],
+    tag: ['@users', '@regression'],
   },
   () => {
     // ============================================================

@@ -4,7 +4,7 @@ import { test, expect } from '../fixtures';
 test.describe(
   'Authentication — Access',
   {
-    tag: ['@authentication'],
+    tag: ['@authentication', '@regression'],
   },
   () => {
     // ============================================================
